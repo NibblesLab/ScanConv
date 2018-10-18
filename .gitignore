@@ -24,16 +24,16 @@ $RECYCLE.BIN/
 
 # Xilinx tempolary files
 *.xaw
-_ngo/*.*
-_xmsgs/*.*
-iseconfig/*.*
-planAhead_run_1/*.*
-ScanConv_xdb/*.*
-templates/*.*
-xlnx_auto_0_xdb/*.*
-xst/*.*
-xst/work/*.*
-xst/work/sub00/*.*
+!ckgen.xaw
+/_ngo/
+/_xmsgs/
+/iseconfig/
+/planAhead_run_1/*
+!/planAhead_run_1/elab_constrs_1.ucf
+/ScanConv_xdb/
+/templates/
+/xlnx_auto_0_xdb/
+/xst/
 *.xml
 *.html
 *.ncd
@@ -76,3 +76,5 @@ xst/work/sub00/*.*
 *.cmd
 _pace.ucf
 output.txt
+*.xsl
+*.vhi
