@@ -29,7 +29,8 @@ $RECYCLE.BIN/
 /_xmsgs/
 /iseconfig/
 /planAhead_run_1/*
-!/planAhead_run_1/elab_constrs_1.ucf
+/planAhead_run_2/*
+!/planAhead_run_2/elab_constrs_1.ucf
 /ScanConv_xdb/
 /templates/
 /xlnx_auto_0_xdb/
@@ -78,3 +79,4 @@ _pace.ucf
 output.txt
 *.xsl
 *.vhi
+*.debug

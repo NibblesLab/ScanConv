@@ -1,17 +1,17 @@
 --------------------------------------------------------------------------------
--- Copyright (c) 1995-2012 Xilinx, Inc.  All rights reserved.
+-- Copyright (c) 1995-2013 Xilinx, Inc.  All rights reserved.
 --------------------------------------------------------------------------------
 --   ____  ____ 
 --  /   /\/   / 
 -- /___/  \  /    Vendor: Xilinx 
--- \   \   \/     Version : 14.2
+-- \   \   \/     Version : 14.7
 --  \   \         Application : xaw2vhdl
 --  /   /         Filename : ckgen.vhd
--- /___/   /\     Timestamp : 12/18/2013 20:13:58
+-- /___/   /\     Timestamp : 11/03/2018 19:35:39
 -- \   \  /  \ 
 --  \___\/\___\ 
 --
---Command: xaw2vhdl-st C:/develop/ScanConv/ckgen.xaw C:/develop/ScanConv/ckgen
+--Command: xaw2vhdl-intstyle C:/develop/ScanConv/ckgen.xaw -st ckgen.vhd
 --Design Name: ckgen
 --Device: xc3s250e-4vq100
 --
@@ -34,7 +34,7 @@ entity ckgen is
           U1_RST_IN          : in    std_logic; 
           U1_CLKFX_OUT       : out   std_logic; 
           U1_CLKIN_IBUFG_OUT : out   std_logic; 
-          U1_CLK0_OUT        : out   std_logic; 
+          U1_CLK2X_OUT       : out   std_logic; 
           U1_STATUS_OUT      : out   std_logic_vector (7 downto 0); 
           U2_CLKFX_OUT       : out   std_logic; 
           U2_CLK0_OUT        : out   std_logic; 
@@ -46,7 +46,7 @@ architecture BEHAVIORAL of ckgen is
    signal GND_BIT            : std_logic;
    signal U1_CLKFX_BUF       : std_logic;
    signal U1_CLKIN_IBUFG     : std_logic;
-   signal U1_CLK0_BUF        : std_logic;
+   signal U1_CLK2X_BUF       : std_logic;
    signal U1_LOCKED_INV_IN   : std_logic;
    signal U2_CLKFB_IN        : std_logic;
    signal U2_CLKFX_BUF       : std_logic;
@@ -62,10 +62,10 @@ architecture BEHAVIORAL of ckgen is
 begin
    GND_BIT <= '0';
    U1_CLKIN_IBUFG_OUT <= U1_CLKIN_IBUFG;
-   U1_CLK0_OUT <= U2_CLKIN_IN;
+   U1_CLK2X_OUT <= U2_CLKIN_IN;
    U2_CLK0_OUT <= U2_CLKFB_IN;
    DCM_SP_INST1 : DCM_SP
-   generic map( CLK_FEEDBACK => "1X",
+   generic map( CLK_FEEDBACK => "2X",
             CLKDV_DIVIDE => 2.0,
             CLKFX_DIVIDE => 4,
             CLKFX_MULTIPLY => 7,
@@ -89,8 +89,8 @@ begin
                 CLKDV=>open,
                 CLKFX=>U1_CLKFX_BUF,
                 CLKFX180=>open,
-                CLK0=>U1_CLK0_BUF,
-                CLK2X=>open,
+                CLK0=>open,
+                CLK2X=>U1_CLK2X_BUF,
                 CLK2X180=>open,
                 CLK90=>open,
                 CLK180=>open,
@@ -102,10 +102,10 @@ begin
    DCM_SP_INST2 : DCM_SP
    generic map( CLK_FEEDBACK => "1X",
             CLKDV_DIVIDE => 2.0,
-            CLKFX_DIVIDE => 8,
+            CLKFX_DIVIDE => 16,
             CLKFX_MULTIPLY => 25,
             CLKIN_DIVIDE_BY_2 => FALSE,
-            CLKIN_PERIOD => 31.250,
+            CLKIN_PERIOD => 15.625,
             CLKOUT_PHASE_SHIFT => "NONE",
             DESKEW_ADJUST => "SYSTEM_SYNCHRONOUS",
             DFS_FREQUENCY_MODE => "LOW",
@@ -142,8 +142,8 @@ begin
       port map (I=>U1_CLKIN_IN,
                 O=>U1_CLKIN_IBUFG);
    
-   U1_CLK0_BUFG_INST : BUFG
-      port map (I=>U1_CLK0_BUF,
+   U1_CLK2X_BUFG_INST : BUFG
+      port map (I=>U1_CLK2X_BUF,
                 O=>U2_CLKIN_IN);
    
    U1_INV_INST : INV

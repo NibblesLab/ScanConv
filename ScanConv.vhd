@@ -1,20 +1,20 @@
 --
 -- Scan Converter for RGBI by Spartan-3E
 --
---   (c)2008-2014 Nibbles Lab.
+--   (c)2008-2018 Nibbles Lab.
 --
 
 -- SW
 -- 1  CONV RGB
 -- 2       RGBI
--- 3       Mono-8
--- 4       Mono-16
+-- 3       Gray-8
+-- 4       Gray-16
 -- 5       Green-8
 -- 6       Green-16
 -- 7  THRU RGB
 -- 8       RGBI
--- 9       Mono-8
--- 10      Mono-16
+-- 9       Gray-8
+-- 10      Gray-16
 -- 11      Green-8
 -- 12      Green-16
 
@@ -29,20 +29,32 @@ library UNISIM;
 use UNISIM.VComponents.all;
 
 entity ScanConv is
-    Port ( CLK : in  STD_LOGIC;
-           RI : in  STD_LOGIC;
-           GI : in  STD_LOGIC;
-           BI : in  STD_LOGIC;
-           II : in  STD_LOGIC;
-           VSI : in  STD_LOGIC;
-           HSI : in  STD_LOGIC;
-           RO : out  STD_LOGIC_VECTOR (3 downto 0);
-           GO : out  STD_LOGIC_VECTOR (3 downto 0);
-           BO : out  STD_LOGIC_VECTOR (3 downto 0);
-           VSO : out  STD_LOGIC;
-           HSO : out  STD_LOGIC;
-			  LED : out std_logic;
-           SW : in  STD_LOGIC_VECTOR (1 to 12));
+	Port (
+		-- Base clock (32MHz)
+		CLK : in  STD_LOGIC;
+		-- Digital RGBI input
+		RI : in  STD_LOGIC;
+		GI : in  STD_LOGIC;
+		BI : in  STD_LOGIC;
+		II : in  STD_LOGIC;
+		VSI : in  STD_LOGIC;
+		HSI : in  STD_LOGIC;
+		-- Analog RGB output
+		RO : out  STD_LOGIC_VECTOR (3 downto 0);
+		GO : out  STD_LOGIC_VECTOR (3 downto 0);
+		BO : out  STD_LOGIC_VECTOR (3 downto 0);
+		VSO : out  STD_LOGIC;
+		HSO : out  STD_LOGIC;
+		LED : out STD_LOGIC;
+		-- Function selector
+		SW : in  STD_LOGIC_VECTOR (1 to 12);
+		-- Test port
+		TST0 : out STD_LOGIC;
+		TST1 : out STD_LOGIC;
+		TST2 : out STD_LOGIC;
+		TST3 : out STD_LOGIC;
+		TST4 : out STD_LOGIC
+	);
 end ScanConv;
 
 architecture Behavioral of ScanConv is
@@ -51,7 +63,6 @@ signal RD : std_logic_vector(3 downto 0);
 signal GD : std_logic_vector(3 downto 0);
 signal BD : std_logic_vector(3 downto 0);
 signal CTR100M : std_logic_vector(12 downto 0);
-signal TS : std_logic_vector(11 downto 0);
 signal OCTR : std_logic_vector(11 downto 0);
 signal ICTR : std_logic_vector(11 downto 0);
 signal Hi : std_logic_vector(5 downto 0);
@@ -63,33 +74,24 @@ signal HS : std_logic;
 signal HBLANK : std_logic;
 signal CLK100 : std_logic;
 signal CLK64 : std_logic;
-
---	COMPONENT ckgen0
---	PORT(
---		CLKIN_IN : IN std_logic;
---		RST_IN : IN std_logic;          
---		CLKFX_OUT : OUT std_logic;
---		CLKIN_IBUFG_OUT : OUT std_logic;
---		CLK0_OUT : OUT std_logic
---		);
---	END COMPONENT;
-
---	COMPONENT ckgen1
---	PORT(
---		CLKIN_IN : IN std_logic;          
---		CLKFX_OUT : OUT std_logic;
---		CLKIN_IBUFG_OUT : OUT std_logic;
---		CLK0_OUT : OUT std_logic;
---		LOCKED_OUT : OUT std_logic
---		);
---	END COMPONENT;
-
---	component BUFG
---	port(
---		I : in std_logic;
---		O : out std_logic
---		);
---	end component;
+signal SELMONO : std_logic;
+signal SNSVS : std_logic_vector(5 downto 0) := (others=>'1');
+signal CTR50ms : std_logic_vector(21 downto 0) := (others=>'1');
+signal FILCTR : std_logic_vector(12 downto 0);
+signal FILTMG : std_logic;
+signal MVS : std_logic;
+signal LVS : std_logic;
+signal DHS : std_logic;
+signal CHK1 : std_logic;
+signal CHK2 : std_logic;
+signal CHK3 : std_logic;
+signal VSOS : std_logic;
+signal HSOS : std_logic;
+signal HUNT : std_logic := '1';
+signal EFLAG : std_logic := '0';
+signal SCTRA : std_logic_vector(2 downto 0);
+signal SCTRB : std_logic_vector(2 downto 0);
+signal SCTRO : std_logic_vector(2 downto 0);
 
 	COMPONENT ckgen
 	PORT(
@@ -97,7 +99,7 @@ signal CLK64 : std_logic;
 		U1_RST_IN : IN std_logic;          
 		U1_CLKFX_OUT : OUT std_logic;
 		U1_CLKIN_IBUFG_OUT : OUT std_logic;
-		U1_CLK0_OUT : OUT std_logic;
+		U1_CLK2X_OUT : OUT std_logic;
 		U1_STATUS_OUT : OUT std_logic_vector(7 downto 0);
 		U2_CLKFX_OUT : OUT std_logic;
 		U2_CLK0_OUT : OUT std_logic;
@@ -108,19 +110,115 @@ signal CLK64 : std_logic;
 
 begin
 
-	VSO<=VSI;
-	HSO<=HS when SW(7 to 12)="111111" else HSI;
+	--
+	-- Output
+	--
+	VSO<=VSOS;
+	VSOS<=MVS when SELMONO='1' and SW(7 to 12)="111111" else VSI;
+	HSO<=HSOS;
+	HSOS<=HS when SW(7 to 12)="111111" else HSI;
 	RO<="0000" when HBLANK='1' and SW(7 to 12)="111111" else RD;
 	GO<="0000" when HBLANK='1' and SW(7 to 12)="111111" else GD;
 	BO<="0000" when HBLANK='1' and SW(7 to 12)="111111" else BD;
 
 	LED<='0';
 
+	TST0<='0';	-- CN2 A01
+	TST1<='0';	-- CN2 A03
+	TST2<='0';	-- CN2 A07
+	TST3<='0';	-- CN2 A09
+	TST4<='0';	-- CN2 A13
+
+	--
+	-- Sense & select mode
+	--
 	process( CLK64 ) begin
 		if CLK64'event and CLK64='1' then
 
-			-- Filtering HSI
-			Si<=Si(4 downto 0)&HSI;
+			-- Sense VSI
+			SNSVS<=SNSVS(4 downto 0)&VSI;
+
+			-- Counter & Mode select
+			if SNSVS="111000" then	-- VS arrived
+				CTR50ms<=(others=>'0');
+				SELMONO<='0';
+			elsif CTR50ms="1111111111111111111111" then	-- time out
+				SELMONO<='1';
+			else
+				CTR50ms<=CTR50ms+'1';
+			end if;
+
+		end if;
+	end process;
+
+	--
+	-- Filter Hsync from Csync
+	--
+	process( CLK64 ) begin
+		if CLK64'event and CLK64='1' then
+
+			-- Latch pulse
+			if FILCTR=3583 then
+				FILTMG<='1';
+			elsif FILCTR=416 then
+				FILTMG<='0';
+			end if;
+
+			-- Count & sync
+			if FILCTR=3583 then			-- fix length loop
+				FILCTR<=(others=>'0');
+			elsif FILCTR=28 then			-- 1st check point
+				CHK1<=HSI;
+				FILCTR<=FILCTR+'1';
+			elsif FILCTR=91 then			-- 2nd check point
+				CHK2<=HSI;
+				FILCTR<=FILCTR+'1';
+			elsif FILCTR=273 then		-- 3rd check point
+				CHK3<=HSI;
+				FILCTR<=FILCTR+'1';
+			elsif FILCTR=336 then		-- 4th check point
+				if (CHK1='0' and CHK2='1' and CHK3='1' and HSI='0') or (CHK1='1' and CHK2='0' and CHK3='0' and HSI='1') then
+					-- just center (+1)
+					FILCTR<="0000101010001";
+				elsif (CHK1='0' and CHK2='1' and CHK3='0' and HSI='0') or (CHK1='1' and CHK2='0' and CHK3='1' and HSI='1') then
+					-- bit later (skip several counts)
+					FILCTR<="0000101100000";
+				elsif (CHK1='0' and CHK2='0' and CHK3='1' and HSI='0') or (CHK1='1' and CHK2='1' and CHK3='0' and HSI='1') then
+					-- bit faster (not count)
+					CHK2<=CHK3;
+				else
+					-- other case (+2)
+					FILCTR<="0000101010010";
+				end if;
+			else
+				FILCTR<=FILCTR+'1';
+			end if;
+
+		end if;
+	end process;
+
+	--
+	-- Latch VSI
+	--
+	process( FILTMG ) begin
+
+		if FILTMG'event and FILTMG='1' then
+			LVS<=HSI;
+		end if;
+
+	end process;
+
+	MVS<=HSI when FILTMG='0' else LVS;
+	DHS<=HSI when SELMONO='0' else not(MVS xor HSI);
+
+	--
+	-- Input counter
+	--
+	process( CLK64 ) begin
+		if CLK64'event and CLK64='1' then
+
+			-- Filtering DHS
+			Si<=Si(4 downto 0)&DHS;
 
 			-- Counter start
 			if Si="111000" then
@@ -132,46 +230,110 @@ begin
 		end if;
 	end process;
 
-	BUFI<=II&GI&RI&BI;
+	BUFI<=II&GI&RI&BI when SELMONO='0' else II&II&II&II;
 
+	--
+	-- Output counter
+	--
 	process( CLK100 ) begin
 		if CLK100'event and CLK100='1' then
 
-			-- Filtering HSI
-			Hi<=Hi(4 downto 0)&HSI;
+			-- Filtering DHS
+			Hi<=Hi(4 downto 0)&DHS;
 
-			-- Counter start
-			if Hi="111000" then
-				CTR100M<=(others=>'0');
-				TS<=CTR100M(12 downto 1);
-				OCTR<=(others=>'0');
-			elsif OCTR=TS then
-				OCTR<=(others=>'0');
-				CTR100M<=CTR100M+'1';
+			-- Counter
+			if HUNT='1' then		-- search the edge
+				if Hi="110000" then
+					CTR100M<=(others=>'0');
+					OCTR<=(others=>'0');
+					HUNT<='0';
+				else
+					CTR100M<=CTR100M+'1';
+				end if;
 			else
-				CTR100M<=CTR100M+'1';
-				OCTR<=OCTR+'1';
+				if CTR100M(12 downto 4)=399 and CTR100M(3 downto 0)/="1111" then
+					if Hi="110000" then
+						EFLAG<='1';
+						SCTRA<=(others=>'0');
+						if SCTRB=7 then
+							SCTRB<=(others=>'0');
+							CTR100M<=CTR100M+2;
+						else
+							SCTRB<=SCTRB+'1';
+							CTR100M<=CTR100M+'1';
+						end if;
+					else
+						CTR100M<=CTR100M+'1';
+					end if;
+					OCTR<=OCTR+'1';
+				elsif CTR100M=6399 then
+					if Hi="110000" then
+						EFLAG<='1';
+					end if;
+					OCTR<=(others=>'0');
+					CTR100M<=(others=>'0');
+				elsif CTR100M=6400 then
+					OCTR<=(0=>'1', others=>'0');
+					CTR100M<=(0=>'1', others=>'0');
+				elsif CTR100M(12 downto 4)=0 then
+					if Hi="110000" then
+						EFLAG<='1';
+						SCTRB<=(others=>'0');
+						if SCTRA=7 then
+							SCTRA<=(others=>'0');
+						else
+							SCTRA<=SCTRA+'1';
+							CTR100M<=CTR100M+'1';
+						end if;
+					else
+						CTR100M<=CTR100M+'1';
+					end if;
+					OCTR<=OCTR+'1';
+				elsif CTR100M=16 then
+					if EFLAG='0' then		-- if not detect the edge at center and +/- 16 counts
+						if SCTRO=7 then	-- to HUNT mode
+							HUNT<='1';
+							SCTRO<=(others=>'0');
+						else
+							SCTRO<=SCTRO+'1';
+						end if;
+					else
+						SCTRO<=(others=>'0');
+						EFLAG<='0';
+					end if;
+					OCTR<=OCTR+'1';
+					CTR100M<=CTR100M+'1';
+				elsif CTR100M=3199 then		-- half of horizontal time
+					OCTR<=(others=>'0');
+					CTR100M<=CTR100M+'1';
+				else
+					OCTR<=OCTR+'1';
+					CTR100M<=CTR100M+'1';
+				end if;
 			end if;
 
 			-- Horizontal Sync genarate
 			if OCTR=0 then
 				HS<='0';
-			elsif OCTR=354 then	--384
+			elsif OCTR=1 then
+				HS<='0';
+			elsif OCTR=354 then
 				HS<='1';
 			end if;
 
 			-- Horizontal Blanking Time counter
-			if OCTR=0 then
+			if OCTR=40 then
 				HBLANK<='1';
-			elsif OCTR=466 then	--496
+			elsif OCTR=466 then
 				HBLANK<='0';
-			elsif OCTR=3136 then	--3136
-				HBLANK<='1';
 			end if;
 
 		end if;
 	end process;
 
+	--
+	-- Contert from digital RGBI to analog RGB
+	--
 	IGRB<=BUFO when SW(7 to 12)="111111" else BUFI;
 	process( SW, IGRB ) begin
 		if SW(1)='0' or SW(7)='0' then	--	RGB
@@ -284,7 +446,7 @@ begin
 					BD<=(others=>'0');
 					GD<=(others=>'0');
 			end case;
-		elsif SW(3)='0' or SW(9)='0' then	--	Mono-8
+		elsif SW(3)='0' or SW(9)='0' then	--	Gray-8
 			case IGRB is
 --				when "0000" =>
 --					RD<=(others=>'0');
@@ -323,7 +485,7 @@ begin
 					BD<=(others=>'0');
 					GD<=(others=>'0');
 			end case;
-		elsif SW(4)='0' or SW(10)='0' then	--	Mono-16
+		elsif SW(4)='0' or SW(10)='0' then	--	Gray-16
 			case IGRB is
 --				when "0000" =>
 --					RD<=(others=>'0');
@@ -518,33 +680,12 @@ begin
       WEB => '0'       -- Port B Write Enable Input
    );
 
---	CKG0: ckgen0 PORT MAP(
---		CLKIN_IN => CLK32,
---		RST_IN => not LOCKDCM1,
---		CLKFX_OUT => CLK100,
---		CLKIN_IBUFG_OUT => open,
---		CLK0_OUT => open
---	);
-
---	BUFG0 : BUFG port map(
---		I=>CLK_dup,
---		O=>CLK32
---	);
-
---	CKG1: ckgen1 PORT MAP(
---		CLKIN_IN => CLK,
---		CLKFX_OUT => CLK64,	-- 56.9MHz
---		CLKIN_IBUFG_OUT => open,
---		CLK0_OUT => CLK32,
---		LOCKED_OUT => LOCKDCM1
---	);
-
 	Inst_ckgen: ckgen PORT MAP(
 		U1_CLKIN_IN => CLK,
 		U1_RST_IN => '0',
 		U1_CLKFX_OUT => CLK64,
 		U1_CLKIN_IBUFG_OUT => open,
-		U1_CLK0_OUT => open,
+		U1_CLK2X_OUT => open,
 		U1_STATUS_OUT => open,
 		U2_CLKFX_OUT => CLK100,
 		U2_CLK0_OUT => open,

@@ -23,7 +23,8 @@
       <association xil_pn:name="BehavioralSimulation" xil_pn:seqID="2"/>
       <association xil_pn:name="Implementation" xil_pn:seqID="1"/>
     </file>
-    <file xil_pn:name="planAhead_run_1/elab_constrs_1.ucf" xil_pn:type="FILE_UCF">
+    <file xil_pn:name="planAhead_run_1/elab_constrs_1.ucf" xil_pn:type="FILE_UCF"/>
+    <file xil_pn:name="ScanConv.ucf" xil_pn:type="FILE_UCF">
       <association xil_pn:name="Implementation" xil_pn:seqID="0"/>
     </file>
   </files>
